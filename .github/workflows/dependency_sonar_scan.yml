@@ -19,7 +19,7 @@ jobs:
         run: |
           mkdir -p dependency-check-report
           docker run --rm \
-            -v "$(pwd):/src" \
+            -v "${{ github.workspace }}:/src" \
             owasp/dependency-check \
             --project "MattinAI_job_offers" \
             --scan /src \
@@ -50,6 +50,6 @@ jobs:
           docker run --rm \
             -e SONAR_HOST_URL="https://sonarcloud.io" \
             -e SONAR_LOGIN="${SONAR_TOKEN}" \
-            -v "$(pwd):/usr/src" \
+            -v "${{ github.workspace }}:/usr/src" \
             sonarsource/sonar-scanner-cli \
             -Dsonar.projectBaseDir=/usr/src
