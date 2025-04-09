@@ -19,13 +19,13 @@ jobs:
         run: |
           mkdir -p dependency-check-report
           docker run --rm \
-            -e NVD_API_KEY="${NVD_API_KEY}" \
             -v "$(pwd):/src" \
             owasp/dependency-check \
             --project "MattinAI_job_offers" \
             --scan /src \
             --format "HTML" \
-            --out /src/dependency-check-report
+            --out /src/dependency-check-report \
+            --nvdApiKey "${NVD_API_KEY}"
 
       - name: Upload Dependency-Check HTML report
         uses: actions/upload-artifact@v4
