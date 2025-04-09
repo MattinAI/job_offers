@@ -17,9 +17,11 @@ jobs:
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
+          pwd
+          ls -la .
           mkdir -p dependency-check-report
           docker run --rm \
-            -v "${{ github.workspace }}:/src" \
+            -v "./:/src" \
             owasp/dependency-check \
             --project "MattinAI_job_offers" \
             --scan /src \
@@ -50,6 +52,6 @@ jobs:
           docker run --rm \
             -e SONAR_HOST_URL="https://sonarcloud.io" \
             -e SONAR_LOGIN="${SONAR_TOKEN}" \
-            -v "${{ github.workspace }}:/usr/src" \
+            -v "./:/usr/src" \
             sonarsource/sonar-scanner-cli \
             -Dsonar.projectBaseDir=/usr/src
