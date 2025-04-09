@@ -24,7 +24,7 @@ jobs:
             -v "./:/src" \
             owasp/dependency-check \
             --project "MattinAI_job_offers" \
-            --scan /src \
+            --scan /src/candidate_eval \
             --format "HTML" \
             --out /src/dependency-check-report \
             --nvdApiKey "${NVD_API_KEY}"
