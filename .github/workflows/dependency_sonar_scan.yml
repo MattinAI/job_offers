@@ -17,12 +17,11 @@ jobs:
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
-          pwd
-          ls -la .
           mkdir -p dependency-check-report
           docker run --rm \
             -v "./:/src" \
             owasp/dependency-check \
+            --enableExperimental \
             --project "MattinAI_job_offers" \
             --scan /src/candidate_eval \
             --format "HTML" \
