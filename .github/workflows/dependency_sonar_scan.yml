@@ -18,12 +18,6 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Generate processed requirements
-        run: |
-          cd candidate_eval
-          pip install -r requirements.txt
-          pip freeze > requirements_processed.txt
-
       - name: OWASP Dependency-Check Scan
         uses: dependency-check/Dependency-Check_Action@main
         with:
