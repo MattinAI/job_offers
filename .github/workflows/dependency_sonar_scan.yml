@@ -3,7 +3,7 @@ name: Dependency & Sonar Scan
 on:
   push:
     branches:
-      - feature/devops
+      - develop
 
 jobs:
   dependency-check:
