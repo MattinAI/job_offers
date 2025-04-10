@@ -47,10 +47,3 @@ jobs:
         uses: SonarSource/sonarqube-scan-action@v5.0.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          args: >
-            -Dsonar.projectKey=MattinAI_job_offers
-            -Dsonar.organization=pk946o72si3y
-            -Dsonar.sources=candidate_eval/app
-            -Dsonar.python.version=3
-            -Dsonar.ci.autoconfig.disabled=true
