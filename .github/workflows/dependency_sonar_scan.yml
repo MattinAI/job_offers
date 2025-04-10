@@ -22,12 +22,10 @@ jobs:
         uses: dependency-check/Dependency-Check_Action@main
         with:
           project: 'MattinAI_job_offers'
-          scanPath: './candidate_eval'
+          path: './candidate_eval'
           format: 'ALL'
-          outputDirectory: './reports'
-          nvdApiKey: ${{ secrets.NVD_API_KEY }}
-          enableExperimental: true
-          additionalArguments: '--failOnCVSS 0'
+          out: './reports'
+          args: '--nvdApiKey ${{ secrets.NVD_API_KEY }} --enableExperimental --failOnCVSS 0'
 
       - name: Upload Dependency-Check reports
         uses: actions/upload-artifact@v4
@@ -46,6 +44,13 @@ jobs:
           fetch-depth: 0
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
+        uses: SonarSource/sonarqube-scan-action@v5.0.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.projectKey=MattinAI_job_offers
+            -Dsonar.organization=pk946o72si3y
+            -Dsonar.sources=candidate_eval/app
+            -Dsonar.python.version=3
+            -Dsonar.ci.autoconfig.disabled=true
