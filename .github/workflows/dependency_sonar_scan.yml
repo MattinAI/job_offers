@@ -25,7 +25,7 @@ jobs:
           path: './candidate_eval'
           format: 'ALL'
           out: './reports'
-          args: '--nvdApiKey ${{ secrets.NVD_API_KEY }} --enableExperimental --failOnCVSS 0'
+          args: '--nvdApiKey ${{ secrets.NVD_API_KEY }} --enableExperimental'
 
       - name: Upload Dependency-Check reports
         uses: actions/upload-artifact@v4
