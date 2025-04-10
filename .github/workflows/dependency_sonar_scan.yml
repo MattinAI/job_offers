@@ -17,22 +17,21 @@ jobs:
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
-          mkdir -p dependency-check-report
           docker run --rm \
             -v "./:/src" \
             owasp/dependency-check \
-            --enableExperimental \
             --project "MattinAI_job_offers" \
             --scan /src/candidate_eval \
             --format "HTML" \
-            --out /src/dependency-check-report \
+            --out /src \
+            --enableExperimental \
             --nvdApiKey "${NVD_API_KEY}"
 
       - name: Upload Dependency-Check HTML report
         uses: actions/upload-artifact@v4
         with:
           name: dependency-check-report
-          path: dependency-check-report/dependency-check-report.html
+          path: dependency-check-report.html
 
   sonarqube:
     name: SonarQube Cloud Scan
