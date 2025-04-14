@@ -6,12 +6,12 @@ from typing import List, Optional
 
 from core.database import get_db
 from utils.document_utils import process_document
-from utils.langflow_utils import parse_skills_response
+from utils.skills_utils import parse_skills_response
 from services.langflow_client import langflow_client
 from core.config import settings
 from repositories.job_offer import job_offer_repository
 from repositories.job_offer_skill import job_offer_skill_repository
-from schemas.job_offer import JobOfferCreate, JobOfferUpdate, JobOfferWithSkills, JobOfferInDB
+from schemas.job_offer import JobOfferCreate, JobOfferUpdate, JobOfferInDB, JobOfferResponse
 from services.storage import minio_service
 
 router = APIRouter()
@@ -38,6 +38,7 @@ async def create_job_offer(
 
         # Upload document to MinIO
         object_name = await minio_service.upload_file(document, minio_service.job_offers_bucket_name)
+        minio_url = f"{minio_service.job_offers_bucket_name}/{object_name}"
         logger.info(f"Document uploaded to MinIO with object name: {object_name}")
         
         # Reset file position
@@ -45,7 +46,7 @@ async def create_job_offer(
 
         # Create a summary flow
         summary_flow = langflow_client.flow(
-            settings.LANGFLOW_SUMMARY_GENERATION_FLOW_ID,
+            settings.LANGFLOW_JOB_OFFER_SUMMARY_GENERATION_FLOW_ID,
             tweaks={
                 "Agent-gE9mt": {},
                 "TextOutput-riQeq": {},
@@ -58,7 +59,7 @@ async def create_job_offer(
 
         # Create a skills extraction flow
         skills_extraction_flow = langflow_client.flow(
-            settings.LANGFLOW_SKILLS_EXTRACTION_FLOW_ID,
+            settings.LANGFLOW_JOB_OFFER_SKILLS_EXTRACTION_FLOW_ID,
             tweaks={
                 "Agent-tFpjL": {},
                 "TextOutput-9JOx7": {},
@@ -70,14 +71,14 @@ async def create_job_offer(
         )
 
         # Run the flow to get summary
-        logger.info(f"Calling LangFlow summary API with flow ID: {settings.LANGFLOW_SUMMARY_GENERATION_FLOW_ID}")
+        logger.info(f"Calling LangFlow summary API with flow ID: {settings.LANGFLOW_JOB_OFFER_SUMMARY_GENERATION_FLOW_ID}")
         summary_result = await summary_flow.run({
             "output_type": "text",
             "input_type": "text"
         })
 
         # Run the flow to get skills
-        logger.info(f"Calling LangFlow skills API with flow ID: {settings.LANGFLOW_SKILLS_EXTRACTION_FLOW_ID}")
+        logger.info(f"Calling LangFlow skills API with flow ID: {settings.LANGFLOW_JOB_OFFER_SKILLS_EXTRACTION_FLOW_ID}")
         skills_result = await skills_extraction_flow.run({
             "output_type": "text",
             "input_type": "text"
@@ -86,24 +87,37 @@ async def create_job_offer(
         summary_text = summary_result["outputs"][0]["outputs"][0]["results"]["text"]["data"]["text"]
         skills_text = skills_result["outputs"][0]["outputs"][0]["results"]["text"]["data"]["text"]
         logger.info(f"Summary and skills extracted from langflow return")
-        
-        # Create the job offer with generated summary
+
+         # Create the job offer with generated summary
         job_offer_data = {
             "title": title,
             "summary": summary_text,
-            "storage_url": object_name,
+            "storage_url": minio_url,
         }
-        
         job_offer = job_offer_repository.create(db, obj_in=JobOfferCreate(**job_offer_data))
 
         skills = parse_skills_response(skills_text)
-        job_offer_skill_repository.bulk_create(db=db, job_offer_id=job_offer.id, skills=skills)
+        created_skills = job_offer_skill_repository.bulk_create(db=db, job_offer_id=job_offer.id, skills=skills, skill_type="job_offer")
 
-        return {"id": job_offer.id, 
+        # Extract skill names for the response
+        skill_details = [
+            {
+                "id": skill.id,
+                "skill": skill.skill.name, 
+                "type": skill.skill.type,
+                "expertise_level": skill.expertise_level,
+                "priority": skill.priority
+            }
+            for skill in created_skills
+        ]
+
+        return {
+            "id": job_offer.id, 
             "title": job_offer.title,
             "summary": summary_text,
-            "skills": skills_text
+            "skills": skill_details
         }
+    
     except Exception as e:
         # If any error occurs, clean up if needed
         if 'job_offer' in locals():
@@ -132,7 +146,7 @@ def read_job_offers(
         # Get all
         return job_offer_repository.get_multi(db, skip=skip, limit=limit)
 
-@router.get("/{job_offer_id}", response_model=JobOfferWithSkills)
+@router.get("/{job_offer_id}", response_model=JobOfferResponse)
 def read_job_offer(
     job_offer_id: int,
     db: Session = Depends(get_db)
@@ -227,7 +241,12 @@ async def update_job_offer(
     
     return job_offer
 
-@router.delete("/{job_offer_id}", response_model=JobOfferInDB)
+@router.delete("/{job_offer_id}", status_code=status.HTTP_204_NO_CONTENT,
+                responses={
+                    204: {"description": "Job offer removed successfully"},
+                    404: {"description": "Invalid Request", "model": dict},
+                    500: {"description": "Server error", "model": dict}
+                })
 def delete_job_offer(
     job_offer_id: int,
     db: Session = Depends(get_db)
@@ -243,7 +262,7 @@ def delete_job_offer(
     # Delete file from minio is there is one
     if job_offer.storage_url:
         try:
-            minio_service.client.remove_object(minio_service.bucket_name, job_offer.storage_url)
+            minio_service.client.remove_object(minio_service.job_offers_bucket_name, job_offer.storage_url)
         except Exception as e:
             # Log the error but continue with deleting the database entry
             print(f"Error deleting file from MinIO: {e}")
