@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 class JobOfferSkillBase(BaseModel):
@@ -45,5 +45,11 @@ class JobOfferInDB(JobOfferBase):
         "from_attributes": True
     }
 
-class JobOfferWithSkills(JobOfferInDB):
-    skills: List[JobOfferSkill] = []
+class JobOfferResponse(BaseModel):
+    id: int
+    title: str
+    summary: Optional[str] = None
+    storage_url: Optional[str] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    skills: List[Dict[str, Any]] = []
