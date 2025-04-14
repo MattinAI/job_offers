@@ -9,6 +9,7 @@ import ast
 from core.database import get_db
 from utils.document_utils import process_document
 from utils.skills_utils import parse_skills_response
+from utils.anom_utils import SelectiveAnonymizer
 from schemas.job_offer_candidate import JobOfferCandidateCreate, JobOfferCandidateDetail, JobOfferCandidateInDB
 from schemas.candidates import CandidateBase, CandidateCreate, CandidateInDB, CandidateResponse  
 from repositories.job_offer import job_offer_repository
@@ -48,31 +49,85 @@ async def create_job_offer_candidate(
         extracted_text, text_size_kb = await process_document(document)
         object_name = await minio_service.upload_file(document, minio_service.candidates_bucket_name)
         minio_url = f"{minio_service.candidates_bucket_name}/{object_name}"
+        logger.info(f"Document uploaded to MinIO with object name: {object_name}")
 
-        # Generate summary and extract skills
-        summary_flow = langflow_client.flow(settings.LANGFLOW_CANDIDATE_SUMMARY_GENERATION_FLOW_ID)
-        skills_extraction_flow = langflow_client.flow(settings.LANGFLOW_CANDIDATE_SKILLS_EXTRACTION_FLOW_ID)
+        # Reset file position
+        await document.seek(0)
         
-        logger.info(f"Calling LangFlow cv summary flow with flow ID: {settings.LANGFLOW_CANDIDATE_SUMMARY_GENERATION_FLOW_ID}")
-        summary_result = await summary_flow.run({
+        # Create and anonymization flow
+        anom_flow = langflow_client.flow(settings.LANGFLOW_CANDIDATE_ANONYMIZATION_FLOW_ID)
+
+        # Run the flow to get anonimization
+        logger.info(f"Calling LangFlow anonimization API with flow ID: {settings.LANGFLOW_CANDIDATE_ANONYMIZATION_FLOW_ID}")
+        anom_result = await anom_flow.run({
             "output_type": "text",
             "input_type": "text", 
             "input_value": extracted_text
         })
 
+        # Extract the result text containing detected entities
+        presidio_output = anom_result["outputs"][0]["outputs"][0]["results"]["text"]["data"]["text"]
+        logger.info("PII detection completed")
+
+        # Parse the Presidio output to get entities
+        original_text, entities = SelectiveAnonymizer.parse_presidio_output(presidio_output)
+
+        # Sort entities by their position in the text
+        sorted_entities = sorted(entities, key=lambda e: e["start"])
+
+        # Extract the first occurrence of a person's name
+        person_name = None
+        for entity in sorted_entities:
+            if entity["entity_type"] == "PERSON":
+                person_name = entity["text"]
+                break
+
+        # Define selective anonymization rules
+        anonymization_rules = {
+            "first_occurrence_only": ["PERSON"],
+            "all_occurrences": ["EMAIL_ADDRESS", "URL", "PHONE_NUMBER", "CREDIT_CARD", "IP_ADDRESS", "ES_NIF", "ES_NIE"],
+            "ignore_types": [],  
+            "min_score": 0.5  
+        }
+        
+        # Apply selective anonymization on the original text
+        anonymized_text = SelectiveAnonymizer.anonymize_original_text(
+            extracted_text,  
+            entities,
+            anonymization_rules
+        )
+
+        logger.info("Selective anonymization completed")
+
+        # Generate summary and extract skills
+        summary_flow = langflow_client.flow(settings.LANGFLOW_CANDIDATE_SUMMARY_GENERATION_FLOW_ID)
+        skills_extraction_flow = langflow_client.flow(settings.LANGFLOW_CANDIDATE_SKILLS_EXTRACTION_FLOW_ID,
+                                                    tweaks={
+                                                    "TextInput-FCe1H": {
+                                                        "input_value": anonymized_text
+                                                    },
+                                                })
+        
+        logger.info(f"Calling LangFlow cv summary flow with flow ID: {settings.LANGFLOW_CANDIDATE_SUMMARY_GENERATION_FLOW_ID}")
+        summary_result = await summary_flow.run({
+            "output_type": "text",
+            "input_type": "text", 
+            "input_value": anonymized_text
+        })
+
         logger.info(f"Calling LangFlow cv skills extraction flow with flow ID: {settings.LANGFLOW_CANDIDATE_SKILLS_EXTRACTION_FLOW_ID}")
         skills_result = await skills_extraction_flow.run({
             "output_type": "text",
-            "input_type": "text",
-            "input_value": extracted_text
+            "input_type": "text"        
         })
         
         summary_text = summary_result["outputs"][0]["outputs"][0]["results"]["text"]["data"]["text"]
         skills_text = skills_result["outputs"][0]["outputs"][0]["results"]["text"]["data"]["text"]
+        logger.info(f"Summary and skills extracted from langflow return")
 
         # Create candidate
         candidate_data = {
-            "name": name or "Unnamed Candidate",
+            "name": person_name if person_name else "Anonymous Candidate",
             "summary": summary_text,
             "storage_url": minio_url
         }
@@ -110,7 +165,7 @@ async def create_job_offer_candidate(
         }
         
         # Calculate fit score
-        fit_score = await _calculate_fit_score(job_offer_dict, candidate_dict)
+        fit_score, cot_summary = await _calculate_fit_score(job_offer_dict, candidate_dict)
 
         # Link candidate to job offer
         job_offer_candidate = job_offer_candidate_repository.create(
@@ -118,7 +173,8 @@ async def create_job_offer_candidate(
             obj_in=JobOfferCandidateCreate(**{
                 "candidate_id": candidate.id,
                 "job_offer_id": job_offer_id,
-                "fit_score": fit_score
+                "fit_score": fit_score,
+                "cot_summary": cot_summary
             })
         )
 
