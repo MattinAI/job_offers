@@ -6,6 +6,16 @@ from sqlalchemy.sql import func
 
 Base = declarative_base()
 
+class Skill(Base):
+    __tablename__ = 'skills'
+    
+    id = Column(Integer, primary_key=True)
+    type = Column(String(50))
+    name = Column(String(255), nullable=False)
+    
+    job_offer_skills = relationship("JobOfferSkill", back_populates="skill")
+    candidate_skills = relationship("CandidateSkill", back_populates="skill")
+
 class JobOffer(Base):
     __tablename__ = 'job_offers'
     
@@ -16,19 +26,20 @@ class JobOffer(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
-    skills = relationship("JobOfferSkill", back_populates="job_offer")
-    candidates = relationship("JobOfferCandidate", back_populates="job_offer")
+    skills = relationship("JobOfferSkill", back_populates="job_offer", cascade="all, delete-orphan")
+    candidates = relationship("JobOfferCandidate", back_populates="job_offer", cascade="all, delete-orphan")
 
 class JobOfferSkill(Base):
     __tablename__ = 'job_offers_skills'
     
     id = Column(Integer, primary_key=True)
     job_offer_id = Column(Integer, ForeignKey('job_offers.id', ondelete='CASCADE'))
-    skill = Column(String(255), nullable=False)
+    skill_id = Column(Integer, ForeignKey('skills.id', ondelete='CASCADE'))
     expertise_level = Column(String(50))
     priority = Column(String(50))
     
     job_offer = relationship("JobOffer", back_populates="skills")
+    skill = relationship("Skill", back_populates="job_offer_skills")
 
 class Candidate(Base):
     __tablename__ = 'candidates'
@@ -38,19 +49,19 @@ class Candidate(Base):
     summary = Column(Text)
     storage_url = Column(String(255))
     
-    skills = relationship("CandidateSkill", back_populates="candidate")
-    job_offers = relationship("JobOfferCandidate", back_populates="candidate")
+    skills = relationship("CandidateSkill", back_populates="candidate", cascade="all, delete-orphan")
+    job_offers = relationship("JobOfferCandidate", back_populates="candidate", cascade="all, delete-orphan")
 
 class CandidateSkill(Base):
     __tablename__ = 'candidate_skills'
     
     id = Column(Integer, primary_key=True)
-    job_candidate_id = Column(Integer, ForeignKey('candidates.id', ondelete='CASCADE'))
-    type = Column(String(50))
-    name = Column(String(255), nullable=False)
+    candidate_id = Column(Integer, ForeignKey('candidates.id', ondelete='CASCADE'))
+    skill_id = Column(Integer, ForeignKey('skills.id', ondelete='CASCADE'))
     expertise_level = Column(String(50))
     
     candidate = relationship("Candidate", back_populates="skills")
+    skill = relationship("Skill", back_populates="candidate_skills")
 
 class JobOfferCandidate(Base):
     __tablename__ = 'job_offer_candidates'
@@ -59,6 +70,7 @@ class JobOfferCandidate(Base):
     candidate_id = Column(Integer, ForeignKey('candidates.id', ondelete='CASCADE'))
     job_offer_id = Column(Integer, ForeignKey('job_offers.id', ondelete='CASCADE'))
     fit_score = Column(Float)
+    cot_summary = Column(Text)
     
     candidate = relationship("Candidate", back_populates="job_offers")
     job_offer = relationship("JobOffer", back_populates="candidates")
