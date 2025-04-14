@@ -51,7 +51,7 @@ class Tweaks(Dict[str, Any]):
     """Tweaks for flows."""
     pass
 
-# Flow class (similar to flow.ts)
+# Flow class
 class Flow:
     """Represents a Langflow flow."""
     def __init__(self, client, flow_id: str, tweaks: Optional[Tweaks] = None):
