@@ -4,7 +4,7 @@ import logging
 import uvicorn
 
 from core.config import settings
-from api.routers import job_offers, candidates
+from api.routers import job_offers, candidates, job_offer_candidates
 from db.models import Base
 from core.database import engine
 from services.storage import minio_service
@@ -50,6 +50,10 @@ app.include_router(
     candidates.router,
     prefix=f"{settings.API_V1_STR}/candidates",
     tags=["candidates"]
+)
+app.include_router(
+    job_offer_candidates.router,
+    prefix=f"{settings.API_V1_STR}"
 )
 
 @app.get("/")
