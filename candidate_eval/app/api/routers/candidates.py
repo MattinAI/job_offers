@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from sqlalchemy.orm import Session
 import logging
+import json
 from typing import List, Optional
 
 from core.database import get_db
@@ -46,10 +47,10 @@ async def create_candidate(
         await document.seek(0)
 
         # Create and anonymization flow
-        anom_flow = langflow_client.flow(settings.LANGFLOW_CANDIDATE_ANONYMIZATION_FLOW_ID)
-
+        anom_flow = langflow_client.flow(settings.LANGFLOW_CANDIDATE_ANONYMIZATION_API_FLOW_ID)
+    
         # Run the flow to get anonimization
-        logger.info(f"Calling LangFlow anonimization API with flow ID: {settings.LANGFLOW_CANDIDATE_ANONYMIZATION_FLOW_ID}")
+        logger.info(f"Calling LangFlow anonimization API with flow ID: {settings.LANGFLOW_CANDIDATE_ANONYMIZATION_API_FLOW_ID}")
         anom_result = await anom_flow.run({
             "output_type": "text",
             "input_type": "text", 
@@ -57,11 +58,11 @@ async def create_candidate(
         })
 
         # Extract the result text containing detected entities
-        presidio_output = anom_result["outputs"][0]["outputs"][0]["results"]["text"]["data"]["text"]
+        presidio_output = json.loads(anom_result["outputs"][0]["outputs"][0]["results"]["text"]["data"]["text"])
         logger.info("PII detection completed")
 
         # Parse the Presidio output to get entities
-        original_text, entities = SelectiveAnonymizer.parse_presidio_output(presidio_output)
+        entities = presidio_output['entities']
 
         # Sort entities by their position in the text
         sorted_entities = sorted(entities, key=lambda e: e["start"])
@@ -77,9 +78,8 @@ async def create_candidate(
         anonymization_rules = {
             "first_occurrence_only": ["PERSON"],
             "all_occurrences": ["EMAIL_ADDRESS", "URL", "PHONE_NUMBER", "CREDIT_CARD", "IP_ADDRESS", "ES_NIF", "ES_NIE"],
-            "ignore_types": [],  
-            "min_score": 0.5  
-        }
+            "ignore_types": []        
+            }
         
         # Apply selective anonymization on the original text
         anonymized_text = SelectiveAnonymizer.anonymize_original_text(

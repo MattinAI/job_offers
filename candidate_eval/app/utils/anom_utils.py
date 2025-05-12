@@ -6,7 +6,7 @@ class SelectiveAnonymizer:
     """
     Utility for selectively anonymizing entities from Presidio based on custom rules.
     """
-    
+
     @staticmethod
     def parse_presidio_output(output_text: str) -> Tuple[str, List[Dict[str, Any]]]:
         """
@@ -81,10 +81,6 @@ class SelectiveAnonymizer:
             # Rule 3: Entity types to always ignore
             if rules.get("ignore_types", []) and entity_type in rules["ignore_types"]:
                 continue
-            
-            # Rule 4: Include entities with scores above threshold
-            if "min_score" in rules and entity["score"] >= rules["min_score"]:
-                filtered_entities.append(entity)
         
         return filtered_entities
     
@@ -177,7 +173,6 @@ class SelectiveAnonymizer:
                 "first_occurrence_only": ["PERSON"],
                 "all_occurrences": ["EMAIL_ADDRESS", "URL"],
                 "ignore_types": [],  # Ignore all other entity types
-                "min_score": 0.0
             }
         
         # Only keep entities in first_occurrence_only or all_occurrences
