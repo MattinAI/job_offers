@@ -63,7 +63,7 @@ async def create_candidate(
 
         # Parse the Presidio output to get entities
         entities = presidio_output['entities']
-
+        
         # Sort entities by their position in the text
         sorted_entities = sorted(entities, key=lambda e: e["start"])
 
@@ -73,7 +73,7 @@ async def create_candidate(
             if entity["entity_type"] == "PERSON":
                 person_name = entity["text"]
                 break
-
+        logger.info(f"Extracted person name: {person_name}")
         # Define selective anonymization rules
         anonymization_rules = {
             "first_occurrence_only": ["PERSON"],
@@ -124,7 +124,7 @@ async def create_candidate(
             "summary": summary_text,
             "storage_url": minio_url
         }
-        
+        logger.info(f"Creating candidate in database with data: {candidate_data}")
         candidate = candidate_repository.create(db, obj_in=CandidateCreate(**candidate_data))
 
         skills = parse_skills_response(skills_text)
