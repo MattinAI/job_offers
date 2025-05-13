@@ -97,7 +97,7 @@ class LangflowClient:
         self.base_url = settings.LANGFLOW_API_URL
         self.base_path = "/api/v1"
         self.api_key = settings.LANGFLOW_API_KEY
-        self.timeout = settings.LANGFLOW_TIMEOUT or 180.0
+        self.timeout = settings.LANGFLOW_TIMEOUT
         self.default_headers = opts.default_headers or {}
         
         # Set User-Agent if not provided
@@ -139,8 +139,7 @@ class LangflowClient:
         path, method = options.path, options.method
         body = options.body
         headers = self._set_headers(options.headers or {})
-        timeout = options.timeout or self.timeout
-        print(f"Request timeout: {timeout}")
+        timeout = self.timeout
         url = f"{self.base_url}{self.base_path}{path}"
         
         async with (self.http_client or httpx.AsyncClient(timeout=timeout)) as client:
@@ -177,7 +176,7 @@ class LangflowClient:
         path, method = options.path, options.method
         body = options.body
         headers = self._set_headers(options.headers or {})
-        timeout = options.timeout or self.timeout
+        timeout = self.timeout
         
         url = f"{self.base_url}{self.base_path}{path}"
         
