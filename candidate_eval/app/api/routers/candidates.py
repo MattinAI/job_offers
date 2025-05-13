@@ -73,7 +73,7 @@ async def create_candidate(
             if entity["entity_type"] == "PERSON":
                 person_name = entity["text"]
                 break
-        logger.info(f"Extracted person name: {person_name}")
+
         # Define selective anonymization rules
         anonymization_rules = {
             "first_occurrence_only": ["PERSON"],
