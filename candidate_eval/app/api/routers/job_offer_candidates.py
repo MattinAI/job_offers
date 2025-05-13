@@ -1,5 +1,5 @@
 # app/api/routers/job_offer_candidates.py
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status, Path
 from sqlalchemy.orm import Session
 import logging
@@ -33,7 +33,6 @@ logger = logging.getLogger(__name__)
 async def create_job_offer_candidate(
     job_offer_id: int = Path(..., description="ID of the job offer"),
     document: UploadFile = File(..., description="Candidate CV"),
-    name: str = Form(None, description="Candidate name"),
     db: Session = Depends(get_db)
 ):
     """
@@ -55,22 +54,22 @@ async def create_job_offer_candidate(
         await document.seek(0)
         
         # Create and anonymization flow
-        anom_flow = langflow_client.flow(settings.LANGFLOW_CANDIDATE_ANONYMIZATION_FLOW_ID)
+        anom_flow = langflow_client.flow(settings.LANGFLOW_CANDIDATE_ANONYMIZATION_API_FLOW_ID)
 
         # Run the flow to get anonimization
-        logger.info(f"Calling LangFlow anonimization API with flow ID: {settings.LANGFLOW_CANDIDATE_ANONYMIZATION_FLOW_ID}")
+        logger.info(f"Calling LangFlow anonimization API with flow ID: {settings.LANGFLOW_CANDIDATE_ANONYMIZATION_API_FLOW_ID}")
         anom_result = await anom_flow.run({
             "output_type": "text",
             "input_type": "text", 
             "input_value": extracted_text
         })
-
+        
         # Extract the result text containing detected entities
-        presidio_output = anom_result["outputs"][0]["outputs"][0]["results"]["text"]["data"]["text"]
+        presidio_output = json.loads(anom_result["outputs"][0]["outputs"][0]["results"]["text"]["data"]["text"])
         logger.info("PII detection completed")
-
+   
         # Parse the Presidio output to get entities
-        original_text, entities = SelectiveAnonymizer.parse_presidio_output(presidio_output)
+        entities = presidio_output['entities']
 
         # Sort entities by their position in the text
         sorted_entities = sorted(entities, key=lambda e: e["start"])
@@ -106,8 +105,8 @@ async def create_job_offer_candidate(
                                                     "TextInput-FCe1H": {
                                                         "input_value": anonymized_text
                                                     },
-                                                })
-        
+                                                })    
+
         logger.info(f"Calling LangFlow cv summary flow with flow ID: {settings.LANGFLOW_CANDIDATE_SUMMARY_GENERATION_FLOW_ID}")
         summary_result = await summary_flow.run({
             "output_type": "text",
@@ -167,16 +166,16 @@ async def create_job_offer_candidate(
         # Calculate fit score
         fit_score, cot_summary = await _calculate_fit_score(job_offer_dict, candidate_dict)
 
+        # Create job offer candidate association
+        job_offer_candidate_data = {
+            "candidate_id": candidate.id,
+            "job_offer_id": job_offer_id,
+            "fit_score": fit_score, 
+            "cot_summary": cot_summary
+        }
+
         # Link candidate to job offer
-        job_offer_candidate = job_offer_candidate_repository.create(
-            db, 
-            obj_in=JobOfferCandidateCreate(**{
-                "candidate_id": candidate.id,
-                "job_offer_id": job_offer_id,
-                "fit_score": fit_score,
-                "cot_summary": cot_summary
-            })
-        )
+        job_offer_candidate = job_offer_candidate_repository.create(db, obj_in=JobOfferCandidateCreate(**job_offer_candidate_data))
 
         # Format skills for response
         skill_details = [
@@ -366,7 +365,7 @@ async def add_candidate_to_job_offer(
             detail={"error": error_msg}
         )
 
-async def _calculate_fit_score(job_offer: Dict[str, Any], candidate: Dict[str, Any]) -> float:
+async def _calculate_fit_score(job_offer: Dict[str, Any], candidate: Dict[str, Any]) -> Tuple[float, str]:
     """
     Calculate fit score between job offer and candidate using LLM
     """
@@ -382,7 +381,7 @@ async def _calculate_fit_score(job_offer: Dict[str, Any], candidate: Dict[str, A
                     "name": skill["skill"],
                     "expertise_level": skill["expertise_level"],
                 }
-                for skill in job_offer["skills"]
+                for skill in candidate["skills"]
             ]
         }
 
@@ -400,12 +399,8 @@ async def _calculate_fit_score(job_offer: Dict[str, Any], candidate: Dict[str, A
         # Create a matching flow with LangFlow
         matching_flow = langflow_client.flow(settings.LANGFLOW_JOB_OFFER_CANDIDATE_FIT_FLOW_ID,
             tweaks={
-                "TextInput-FCe1H": {
-                    "input_value": json.dumps(job_offer_data)
-                },
-                "TextInput-ZLrFC": {
-                    "input_value": json.dumps(candidate_data)
-                }
+                "TextInput-FCe1H": {"input_value": json.dumps(job_offer_data)},
+                "TextInput-ZLrFC": {"input_value": json.dumps(candidate_data)}
             }
         )
 
@@ -417,8 +412,8 @@ async def _calculate_fit_score(job_offer: Dict[str, Any], candidate: Dict[str, A
         # Extract match score
         try:
             fit_score_dict = ast.literal_eval(result)
-            fit_score = fit_score_dict.get("fitScore", 0)
-            cot_summary = fit_score_dict.get("resume", '')
+            fit_score = int(fit_score_dict.get("fitScore", 0))
+            cot_summary = str(fit_score_dict.get("resume", ''))
         except (ValueError, SyntaxError):
             fit_score = 0
 
