@@ -1,5 +1,5 @@
 import os
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     
     # Database
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql://recruiter:password@localhost:5432/recruitment")
+    DATABASE_URL: str = ""    
     
     # MinIO
     MINIO_ROOT_USER: str = os.getenv("MINIO_ROOT_USER", "minioadmin")
@@ -31,7 +31,6 @@ class Settings(BaseSettings):
     LANGFLOW_CANDIDATE_ANONYMIZATION_API_FLOW_ID: str = os.getenv("LANGFLOW_CANDIDATE_ANONYMIZATION_API_FLOW_ID", "")
     LANGFLOW_JOB_OFFER_CANDIDATE_FIT_FLOW_ID: str = os.getenv("LANGFLOW_JOB_OFFER_CANDIDATE_FIT_FLOW_ID", "")
 
-    class Config:
-        case_sensitive = True
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 settings = Settings()
