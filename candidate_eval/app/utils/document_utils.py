@@ -2,9 +2,11 @@
 import io
 import PyPDF2
 import asyncio
+import docx2txt
 import logging
 from fastapi import HTTPException, status, UploadFile
 from typing import List, Tuple, Optional
+from docx import Document
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +37,43 @@ async def validate_document_type(document: UploadFile) -> None:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"error": "File must be a PDF, Word document or a text file"}
         )
+
+async def extract_text_from_docx(docx_file: UploadFile) -> str:
+    """
+    Extract text from a Word document (.docx).
+    
+    Args:
+        docx_file: The Word document to extract text from
+    
+    Returns:
+        Extracted text from the Word document
+    
+    Raises:
+        DocumentProcessingError: If text extraction fails
+    """
+    try:
+        await docx_file.seek(0)
+        content = await docx_file.read()
+        
+        # Use python-docx for .docx files
+        doc = Document(io.BytesIO(content))
+        text = ""
+        
+        # Extract text from paragraphs
+        for paragraph in doc.paragraphs:
+            text += paragraph.text + "\n"
+            
+        # Extract text from tables
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    text += cell.text + " "
+                text += "\n"
+        
+        return text
+    except Exception as e:
+        logger.error(f"Error extracting text from Word document: {str(e)}")
+        raise DocumentProcessingError(f"Error extracting text from Word document: {str(e)}")
 
 async def extract_text_from_pdf(pdf_file: UploadFile) -> str:
     """
@@ -91,11 +130,13 @@ async def extract_text_from_document(document: UploadFile) -> str:
         if "pdf" in content_type:
             return await extract_text_from_pdf(document)
         elif "docx" in content_type or "doc" in content_type or "word" in content_type:
-            # You can add Word document extraction here if needed
-            # For now, we'll read raw content and convert to string
-            await document.seek(0)
-            content = await document.read()
-            return f"Document content (binary): {len(content)} bytes"
+            if "docx" in content_type:
+                return await extract_text_from_docx(document)
+            else:
+                # For .doc files, use python-docx2txt or similar
+                await document.seek(0)
+                content = await document.read()
+                return docx2txt.process(io.BytesIO(content))
         elif "text/plain" in content_type:
             await document.seek(0)
             content = await document.read()
