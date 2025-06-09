@@ -416,6 +416,7 @@ async def _calculate_fit_score(job_offer: Dict[str, Any], candidate: Dict[str, A
             cot_summary = str(fit_score_dict.get("resume", ''))
         except (ValueError, SyntaxError):
             fit_score = 0
+            cot_summary = "Error parsing fit score result"
 
         logging.info(f"LangFlow match result: {fit_score}")
         logging.info(f"LangFlow CoT summary result: {cot_summary}")
@@ -424,7 +425,7 @@ async def _calculate_fit_score(job_offer: Dict[str, Any], candidate: Dict[str, A
 
     except Exception as e:
             logging.error(f"Error in fit score calculation: {type(e).__name__}: {str(e)}")
-            return 0
+            return 0,  f"Error calculating fit score: {str(e)}"
 
 @router.delete("/{candidate_id}", 
                status_code=status.HTTP_204_NO_CONTENT,
