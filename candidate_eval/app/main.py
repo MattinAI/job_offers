@@ -1,7 +1,10 @@
+# main.py
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 import logging
-import uvicorn
+from contextlib import asynccontextmanager
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy import text
 
 from core.config import settings
 from api.routers import job_offers, candidates, job_offer_candidates
@@ -13,22 +16,36 @@ from services.storage import minio_service
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Create database tables
-logger.info("Creating database tables...")
-Base.metadata.create_all(bind=engine)
-logger.info("Database tables created successfully.")
-
-# Ensure MinIO bucket exists
-logger.info("Ensuring MinIO buckets exists...")
-try:
-    minio_service._ensure_bucket_exists()
-    logger.info("MinIO bucket setup complete.")
-except Exception as e:
-    logger.error(f"Error setting up MinIO bucket: {e}")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Creating database tables...")
+    try:
+        with engine.connect() as conn:
+            with conn.begin():
+                # Acquire lock to prevent race condition
+                conn.execute(text("LOCK TABLE pg_catalog.pg_namespace IN SHARE ROW EXCLUSIVE MODE"))
+                Base.metadata.create_all(bind=conn, checkfirst=True)
+        logger.info("Database tables created successfully.")
+    except Exception as e:
+        logger.error(f"Error creating database tables: {e}")
+        raise
+    
+    logger.info("Ensuring MinIO buckets exists...")
+    try:
+        minio_service._ensure_bucket_exists()
+        logger.info("MinIO bucket setup complete.")
+    except Exception as e:
+        logger.error(f"Error setting up MinIO bucket: {e}")
+    
+    yield
+    
+    # Shutdown 
+    logger.info("Application shutting down...")
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    openapi_url=f"{settings.API_V1_STR}/openapi.json"
+    openapi_url=f"{settings.API_V1_STR}/openapi.json",
+    lifespan=lifespan
 )
 
 # Set up CORS
@@ -63,6 +80,3 @@ def root():
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
