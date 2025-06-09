@@ -10,7 +10,11 @@ class Settings(BaseSettings):
     
     # Database
     DATABASE_URL: str = ""    
-    
+    DATABASE_POOL_SIZE: int = int(os.getenv("DATABASE_POOL_SIZE", 30))
+    DATABASE_MAX_OVERFLOW: int = int(os.getenv("DATABASE_MAX_OVERFLOW", 60))
+    DATABASE_POOL_TIMEOUT: int = int(os.getenv("DATABASE_POOL_TIMEOUT", 60))
+    DATABASE_POOL_RECYCLE: int = int(os.getenv("DATABASE_POOL_RECYCLE", 3600))
+
     # MinIO
     MINIO_ROOT_USER: str = os.getenv("MINIO_ROOT_USER", "minioadmin")
     MINIO_ROOT_PASSWORD: str = os.getenv("MINIO_ROOT_PASSWORD", "minioadmin")
@@ -22,7 +26,7 @@ class Settings(BaseSettings):
     # LangFlow API
     LANGFLOW_API_URL: str = os.getenv("LANGFLOW_API_URL", "localhost:7860")
     LANGFLOW_API_KEY: str = os.getenv("LANGFLOW_API_KEY", "sdfsfsd")
-    LANGFLOW_TIMEOUT: int = os.getenv("LANGFLOW_TIMEOUT", 180)
+    LANGFLOW_TIMEOUT: int = os.getenv("LANGFLOW_TIMEOUT", 420)
     LANGFLOW_JOB_OFFER_SUMMARY_GENERATION_FLOW_ID: str = os.getenv("LANGFLOW_JOB_OFFER_SUMMARY_GENERATION_FLOW_ID", "")
     LANGFLOW_JOB_OFFER_SKILLS_EXTRACTION_FLOW_ID: str= os.getenv("LANGFLOW_JOB_OFFER_SKILLS_EXTRACTION_FLOW_ID", "")
     LANGFLOW_CANDIDATE_SUMMARY_GENERATION_FLOW_ID: str = os.getenv("LANGFLOW_CANDIDATE_SUMMARY_GENERATION_FLOW_ID", "")
