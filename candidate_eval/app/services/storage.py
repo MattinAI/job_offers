@@ -32,8 +32,12 @@ class MinioService:
                 else: 
                     logger.info(f"Bucket '{bucket_name}' already exists")
             except S3Error as e:
-                logger.error(f"Error ensuring bucket exists: {e}")
-    
+                if "BucketAlreadyOwnedByYou" in str(e) or "BucketAlreadyExists" in str(e):
+                    logger.info(f"Bucket '{bucket_name}' already exists")
+                else:
+                    logger.error(f"Error ensuring bucket exists: {e}")
+                    raise
+
     async def upload_file(self, file: UploadFile, bucket_name: str) -> str:
         """Upload a file to MinIO and return its path"""
         try:
