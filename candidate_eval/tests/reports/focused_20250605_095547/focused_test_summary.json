@@ -1,0 +1,44 @@
+{
+  "generated_at": "2025-06-05T10:00:49.159175",
+  "total_tests": 1,
+  "endpoint_metrics": {
+    "put_endpoint": {
+      "total_requests": 168,
+      "total_failures": 0,
+      "failure_rate": 0.0,
+      "avg_response_time": 12210.000936404651
+    },
+    "post_endpoint": {
+      "total_requests": 54,
+      "total_failures": 0,
+      "failure_rate": 0.0,
+      "avg_response_time": 52129.61554557424
+    },
+    "overall": {
+      "total_requests": 0,
+      "total_failures": 0,
+      "failure_rate": 0.0
+    }
+  },
+  "validation_status": {
+    "endpoints_validated": true,
+    "put_endpoint_grade": "FAIL",
+    "post_endpoint_grade": "FAIL",
+    "overall_grade": "FAIL",
+    "issues": [
+      "PUT response time too slow: 12210ms",
+      "POST response time too slow: 52130ms"
+    ]
+  },
+  "test_results": [
+    {
+      "test_name": "moderate_endpoint_test",
+      "total_requests": 0,
+      "total_failures": 0,
+      "put_requests": 168,
+      "put_failures": 0,
+      "post_requests": 54,
+      "post_failures": 0
+    }
+  ]
+}

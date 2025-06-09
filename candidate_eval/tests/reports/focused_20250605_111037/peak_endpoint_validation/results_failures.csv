@@ -1,0 +1,6 @@
+Method,Name,Error,Occurrences
+GET,GET Job Offer Candidates,"CatchResponseError('GET failed: 500 - {""detail"":{""error"":""Error retrieving candidates for job offer: OperationalError: (psycopg2.OperationalError) connection to server at \\""postgres\\"" (172.18.0.8), port 5432 failed: FATAL:  sorry, too many clients already\\n\\n(Background on this error at: https://sqlalche.me/e/20/e3q8)""}}')",57
+GET,GET All Job Offers,CatchResponseError('GET job offers failed: 500 - Internal Server Error'),21
+GET,GET All Candidates,CatchResponseError('GET candidates failed: 500 - Internal Server Error'),31
+POST,POST Create and Link Candidate,"CatchResponseError('POST failed: 500 - {""detail"":{""error"":""Error adding candidate: (psycopg2.OperationalError) connection to server at \\""postgres\\"" (172.18.0.8), port 5432 failed: FATAL:  sorry, too many clients already\\n\\n(Background on this error at: https://sqlalche.me/e/20/e3q8)""}}')",38
+PUT,PUT Link Existing Candidate,"CatchResponseError('PUT failed: 500 - {""detail"":{""error"":""Error adding candidate to job offer: OperationalError: (psycopg2.OperationalError) connection to server at \\""postgres\\"" (172.18.0.8), port 5432 failed: FATAL:  sorry, too many clients already\\n\\n(Background on this error at: https://sqlalche.me/e/20/e3q8)""}}')",195
