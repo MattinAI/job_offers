@@ -1,6 +1,7 @@
 # app/api/routers/job_offers.py
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
 from sqlalchemy.orm import Session
+from langflow_client import FlowRequestOptions, InputTypes, OutputTypes
 import logging
 import json
 from typing import List, Optional
@@ -48,14 +49,16 @@ async def create_candidate(
 
         # Create and anonymization flow
         anom_flow = langflow_client.flow(settings.LANGFLOW_CANDIDATE_ANONYMIZATION_API_FLOW_ID)
-    
+
+        # Create options for anonymization flow
+        flow_options = FlowRequestOptions(
+            input_type=InputTypes.TEXT,  
+            output_type=OutputTypes.TEXT
+        )
+
         # Run the flow to get anonimization
         logger.info(f"Calling LangFlow anonimization API with flow ID: {settings.LANGFLOW_CANDIDATE_ANONYMIZATION_API_FLOW_ID}")
-        anom_result = await anom_flow.run({
-            "output_type": "text",
-            "input_type": "text", 
-            "input_value": extracted_text
-        })
+        anom_result = await anom_flow.run(extracted_text, options=flow_options)
 
         # Extract the result text containing detected entities
         presidio_output = json.loads(anom_result["outputs"][0]["outputs"][0]["results"]["text"]["data"]["text"])
@@ -92,27 +95,15 @@ async def create_candidate(
 
         # Create a summary and skill extraction flow
         summary_flow = langflow_client.flow(settings.LANGFLOW_CANDIDATE_SUMMARY_GENERATION_FLOW_ID)
-        skills_extraction_flow = langflow_client.flow(settings.LANGFLOW_CANDIDATE_SKILLS_EXTRACTION_FLOW_ID,
-                                                    tweaks={
-                                                    "TextInput-FCe1H": {
-                                                        "input_value": anonymized_text
-                                                    },
-                                                })
+        skills_extraction_flow = langflow_client.flow(settings.LANGFLOW_CANDIDATE_SKILLS_EXTRACTION_FLOW_ID)
 
         # Run the flow to get summary
         logger.info(f"Calling LangFlow summary API with flow ID: {settings.LANGFLOW_CANDIDATE_SUMMARY_GENERATION_FLOW_ID}")
-        summary_result = await summary_flow.run({
-            "output_type": "text",
-            "input_type": "text",
-            "input_value": anonymized_text       
-            })
+        summary_result = await summary_flow.run(anonymized_text, options=flow_options)
 
         # Run the flow to get skills
         logger.info(f"Calling LangFlow skills API with flow ID: {settings.LANGFLOW_CANDIDATE_SKILLS_EXTRACTION_FLOW_ID}")
-        skills_result = await skills_extraction_flow.run({
-            "output_type": "text",
-            "input_type": "text"
-            })
+        skills_result = await skills_extraction_flow.run(anonymized_text,options=flow_options)
 
         summary_text = summary_result["outputs"][0]["outputs"][0]["results"]["text"]["data"]["text"]
         skills_text = skills_result["outputs"][0]["outputs"][0]["results"]["text"]["data"]["text"]

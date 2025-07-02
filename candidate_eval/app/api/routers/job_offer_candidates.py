@@ -2,9 +2,10 @@
 from typing import List, Dict, Any, Tuple
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status, Path
 from sqlalchemy.orm import Session
-import logging
+from langflow_client import FlowRequestOptions, InputTypes, OutputTypes
 import json
 import ast
+import logging
 
 from core.database import get_db
 from utils.document_utils import process_document
@@ -17,11 +18,19 @@ from repositories.candidate import candidate_repository
 from repositories.candidate_skill import candidate_skill_repository
 from repositories.job_offer_candidate import job_offer_candidate_repository
 from services.langflow_client import langflow_client
+from langflow_client import FlowRequestOptions, InputTypes, OutputTypes
+
 from core.config import settings
 from services.storage import minio_service
 
 router = APIRouter(prefix="/job-offers/{job_offer_id}/candidates", tags=["Job Offer Candidates"])
 logger = logging.getLogger(__name__)
+
+# Create options for anonymization flow
+flow_options = FlowRequestOptions(
+    input_type=InputTypes.TEXT,  
+    output_type=OutputTypes.TEXT
+)
 
 @router.post("/", response_model=JobOfferCandidateDetail, 
             status_code=status.HTTP_201_CREATED,
@@ -58,11 +67,7 @@ async def create_job_offer_candidate(
 
         # Run the flow to get anonimization
         logger.info(f"Calling LangFlow anonimization API with flow ID: {settings.LANGFLOW_CANDIDATE_ANONYMIZATION_API_FLOW_ID}")
-        anom_result = await anom_flow.run({
-            "output_type": "text",
-            "input_type": "text", 
-            "input_value": extracted_text
-        })
+        anom_result = await anom_flow.run(extracted_text, options=flow_options)
         
         # Extract the result text containing detected entities
         presidio_output = json.loads(anom_result["outputs"][0]["outputs"][0]["results"]["text"]["data"]["text"])
@@ -100,25 +105,13 @@ async def create_job_offer_candidate(
 
         # Generate summary and extract skills
         summary_flow = langflow_client.flow(settings.LANGFLOW_CANDIDATE_SUMMARY_GENERATION_FLOW_ID)
-        skills_extraction_flow = langflow_client.flow(settings.LANGFLOW_CANDIDATE_SKILLS_EXTRACTION_FLOW_ID,
-                                                    tweaks={
-                                                    "TextInput-FCe1H": {
-                                                        "input_value": anonymized_text
-                                                    },
-                                                })    
+        skills_extraction_flow = langflow_client.flow(settings.LANGFLOW_CANDIDATE_SKILLS_EXTRACTION_FLOW_ID)    
 
         logger.info(f"Calling LangFlow cv summary flow with flow ID: {settings.LANGFLOW_CANDIDATE_SUMMARY_GENERATION_FLOW_ID}")
-        summary_result = await summary_flow.run({
-            "output_type": "text",
-            "input_type": "text", 
-            "input_value": anonymized_text
-        })
+        summary_result = await summary_flow.run(anonymized_text, options=flow_options)
 
         logger.info(f"Calling LangFlow cv skills extraction flow with flow ID: {settings.LANGFLOW_CANDIDATE_SKILLS_EXTRACTION_FLOW_ID}")
-        skills_result = await skills_extraction_flow.run({
-            "output_type": "text",
-            "input_type": "text"        
-        })
+        skills_result = await skills_extraction_flow.run(anonymized_text, options=flow_options)
         
         summary_text = summary_result["outputs"][0]["outputs"][0]["results"]["text"]["data"]["text"]
         skills_text = skills_result["outputs"][0]["outputs"][0]["results"]["text"]["data"]["text"]
@@ -397,16 +390,14 @@ async def _calculate_fit_score(job_offer: Dict[str, Any], candidate: Dict[str, A
         }
 
         # Create a matching flow with LangFlow
-        matching_flow = langflow_client.flow(settings.LANGFLOW_JOB_OFFER_CANDIDATE_FIT_FLOW_ID,
-            tweaks={
+        matching_flow = langflow_client.flow(settings.LANGFLOW_JOB_OFFER_CANDIDATE_FIT_FLOW_ID).tweak(**{
                 "TextInput-FCe1H": {"input_value": json.dumps(job_offer_data)},
                 "TextInput-ZLrFC": {"input_value": json.dumps(candidate_data)}
-            }
-        )
+            })
 
         # Run the flow to get match score
         logging.info(f"Calling LangFlow match flow with flow ID: {settings.LANGFLOW_JOB_OFFER_CANDIDATE_FIT_FLOW_ID}")
-        fit_result = await matching_flow.run()
+        fit_result = await matching_flow.run(options=flow_options)
         result = fit_result["outputs"][0]["outputs"][0]["results"]["text"]["text"]
 
         # Extract match score
@@ -414,6 +405,7 @@ async def _calculate_fit_score(job_offer: Dict[str, Any], candidate: Dict[str, A
             fit_score_dict = ast.literal_eval(result)
             fit_score = int(fit_score_dict.get("fitScore", 0))
             cot_summary = str(fit_score_dict.get("resume", ''))
+            print(f'cot_summary: {cot_summary}')    
         except (ValueError, SyntaxError):
             fit_score = 0
             cot_summary = "Error parsing fit score result"

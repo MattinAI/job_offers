@@ -13,9 +13,16 @@ from repositories.job_offer import job_offer_repository
 from repositories.job_offer_skill import job_offer_skill_repository
 from schemas.job_offer import JobOfferCreate, JobOfferUpdate, JobOfferInDB, JobOfferResponse
 from services.storage import minio_service
+from langflow_client import FlowRequestOptions, InputTypes, OutputTypes
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Create options for job offer flows
+flow_options = FlowRequestOptions(
+    input_type=InputTypes.TEXT,  
+    output_type=OutputTypes.TEXT
+)
 
 @router.post("/", status_code=status.HTTP_201_CREATED, 
            responses={
@@ -45,44 +52,18 @@ async def create_job_offer(
         await document.seek(0)
 
         # Create a summary flow
-        summary_flow = langflow_client.flow(
-            settings.LANGFLOW_JOB_OFFER_SUMMARY_GENERATION_FLOW_ID,
-            tweaks={
-                "Agent-gE9mt": {},
-                "TextOutput-riQeq": {},
-                "TextInput-cTRS8": {
-                    "input_value": extracted_text
-                },
-                "Prompt-kPUCU": {}
-            }
-        )
+        summary_flow = langflow_client.flow(settings.LANGFLOW_JOB_OFFER_SUMMARY_GENERATION_FLOW_ID)
 
         # Create a skills extraction flow
-        skills_extraction_flow = langflow_client.flow(
-            settings.LANGFLOW_JOB_OFFER_SKILLS_EXTRACTION_FLOW_ID,
-            tweaks={
-                "Agent-tFpjL": {},
-                "TextOutput-9JOx7": {},
-                "TextInput-ZLrFC": {
-                    "input_value": extracted_text
-                },
-                "Prompt-NCiV2": {}
-            }
-        )
+        skills_extraction_flow = langflow_client.flow(settings.LANGFLOW_JOB_OFFER_SKILLS_EXTRACTION_FLOW_ID)
 
         # Run the flow to get summary
         logger.info(f"Calling LangFlow summary API with flow ID: {settings.LANGFLOW_JOB_OFFER_SUMMARY_GENERATION_FLOW_ID}")
-        summary_result = await summary_flow.run({
-            "output_type": "text",
-            "input_type": "text"
-        })
+        summary_result = await summary_flow.run(extracted_text, options=flow_options)
 
         # Run the flow to get skills
         logger.info(f"Calling LangFlow skills API with flow ID: {settings.LANGFLOW_JOB_OFFER_SKILLS_EXTRACTION_FLOW_ID}")
-        skills_result = await skills_extraction_flow.run({
-            "output_type": "text",
-            "input_type": "text"
-        })
+        skills_result = await skills_extraction_flow.run(extracted_text, options=flow_options)
 
         summary_text = summary_result["outputs"][0]["outputs"][0]["results"]["text"]["data"]["text"]
         skills_text = skills_result["outputs"][0]["outputs"][0]["results"]["text"]["data"]["text"]
